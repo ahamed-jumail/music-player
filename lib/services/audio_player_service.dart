@@ -1,3 +1,4 @@
+import 'package:ajs_music_player/services/ajs_audio_handler.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -8,7 +9,9 @@ class AudioPlayerService {
 
   static final AudioPlayerService instance = AudioPlayerService._();
 
-  final AudioPlayer _player = AudioPlayer();
+  late final AjsAudioHandler _handler;
+
+  late final AudioPlayer _player;
 
   AudioPlayer get player => _player;
 
@@ -39,10 +42,13 @@ class AudioPlayerService {
     return queue.value[currentIndex.value];
   }
 
-  Future<void> init() async {
+  Future<void> init(AjsAudioHandler handler) async {
     if (_initialized) return;
 
     _initialized = true;
+
+    _handler = handler;
+    _player = handler.player;
 
     _player.playerStateStream.listen((state) {
       isPlaying.value = state.playing;
@@ -60,11 +66,17 @@ class AudioPlayerService {
       if (index != null) {
         currentIndex.value = index;
 
+        // Keep the notification's title/artist in sync with what's
+        // actually playing.
+        final playingSong = currentSong;
+
+        if (playingSong != null) {
+          _handler.mediaItem.add(playingSong.toMediaItem());
+        }
+
         // Once a manually-queued song actually starts playing, it's no
         // longer "up next" — drop it from the manual queue so future
         // additions are inserted in the right place.
-        final playingSong = currentSong;
-
         if (playingSong != null &&
             manualQueue.value.isNotEmpty &&
             manualQueue.value.first.id == playingSong.id) {
@@ -99,6 +111,9 @@ class AudioPlayerService {
         }).toList(),
       );
 
+      _handler.queue.add(songs.map((s) => s.toMediaItem()).toList());
+      _handler.mediaItem.add(songs[index].toMediaItem());
+
       await _player.setAudioSource(
         playlist,
         initialIndex: index,
@@ -124,7 +139,8 @@ class AudioPlayerService {
       return;
     }
 
-    final insertPosition = currentIndex.value + 1 + manualQueue.value.length;
+    final insertPosition =
+        currentIndex.value + 1 + manualQueue.value.length;
 
     final updatedQueue = List<Song>.from(queue.value);
     final safePosition = insertPosition.clamp(0, updatedQueue.length);
@@ -132,6 +148,7 @@ class AudioPlayerService {
     queue.value = updatedQueue;
 
     manualQueue.value = List<Song>.from(manualQueue.value)..add(song);
+    _handler.queue.add(updatedQueue.map((s) => s.toMediaItem()).toList());
 
     try {
       final audioSource = _player.audioSource;
@@ -166,6 +183,7 @@ class AudioPlayerService {
 
     manualQueue.value = List<Song>.from(manualQueue.value)
       ..removeWhere((s) => s.id == songId);
+    _handler.queue.add(updatedQueue.map((s) => s.toMediaItem()).toList());
 
     try {
       final audioSource = _player.audioSource;
@@ -226,7 +244,7 @@ class AudioPlayerService {
   }
 
   Future<void> stop() async {
-    await _player.stop();
+    await _handler.stop();
     currentIndex.value = -1;
   }
 
