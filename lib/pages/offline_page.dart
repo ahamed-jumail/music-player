@@ -230,7 +230,9 @@ class _OfflinePageState extends State<OfflinePage> {
               builder: (_, likedSongs, _) {
                 return ValueListenableBuilder<int>(
                   valueListenable: _player.currentIndex,
-                  builder: (_, currentIndex, _) {
+                  builder: (_, _, _) {
+                    final currentSong = _player.currentSong;
+
                     return ListView.separated(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
@@ -246,7 +248,8 @@ class _OfflinePageState extends State<OfflinePage> {
                           song.id,
                           () => LayerLink(),
                         );
-                        final isPlayingSong = currentIndex == index;
+                        final isPlayingSong =
+                            currentSong != null && currentSong.id == song.id;
                         final isLiked = likedSongs.contains(song.id);
 
                         return CompositedTransformTarget(
@@ -344,7 +347,10 @@ class _OfflinePageState extends State<OfflinePage> {
                                 ),
 
                                 onTap: () async {
-                                  if (_player.currentIndex.value == index) {
+                                  final currentSong = _player.currentSong;
+
+                                  if (currentSong != null &&
+                                      currentSong.id == song.id) {
                                     await _player.toggle();
                                   } else {
                                     await _player.play(_songs, index);
