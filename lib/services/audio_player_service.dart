@@ -22,6 +22,13 @@ class AudioPlayerService {
 
   final ValueNotifier<Duration> duration = ValueNotifier(Duration.zero);
 
+  /// Songs that were manually added to "play next", in the order they were
+  /// queued. These always sit immediately after [currentIndex] inside
+  /// [queue] (and inside the underlying [ConcatenatingAudioSource]) until
+  /// they start playing, at which point they fall off the front of this
+  /// list automatically.
+  final ValueNotifier<List<Song>> manualQueue = ValueNotifier([]);
+
   bool _initialized = false;
 
   Song? get currentSong {
@@ -52,6 +59,18 @@ class AudioPlayerService {
     _player.currentIndexStream.listen((index) {
       if (index != null) {
         currentIndex.value = index;
+
+        // Once a manually-queued song actually starts playing, it's no
+        // longer "up next" — drop it from the manual queue so future
+        // additions are inserted in the right place.
+        final playingSong = currentSong;
+
+        if (playingSong != null &&
+            manualQueue.value.isNotEmpty &&
+            manualQueue.value.first.id == playingSong.id) {
+          final updated = List<Song>.from(manualQueue.value)..removeAt(0);
+          manualQueue.value = updated;
+        }
       }
     });
 
@@ -66,6 +85,7 @@ class AudioPlayerService {
 
   Future<void> play(List<Song> songs, int index) async {
     queue.value = songs;
+    manualQueue.value = [];
 
     try {
       await _player.stop();
@@ -91,6 +111,77 @@ class AudioPlayerService {
       debugPrint(e.toString());
       debugPrint(st.toString());
     }
+  }
+
+  /// Adds [song] so it plays right after the current song, and after any
+  /// other songs that were already queued this way (preserving the order
+  /// they were added in). This edits the *live* playing queue, so it takes
+  /// effect immediately.
+  Future<void> addToQueue(Song song) async {
+    if (currentIndex.value < 0 || queue.value.isEmpty) {
+      // Nothing is currently playing, so there's no "next" position to
+      // insert into.
+      return;
+    }
+
+    final insertPosition = currentIndex.value + 1 + manualQueue.value.length;
+
+    final updatedQueue = List<Song>.from(queue.value);
+    final safePosition = insertPosition.clamp(0, updatedQueue.length);
+    updatedQueue.insert(safePosition, song);
+    queue.value = updatedQueue;
+
+    manualQueue.value = List<Song>.from(manualQueue.value)..add(song);
+
+    try {
+      final audioSource = _player.audioSource;
+
+      if (audioSource is ConcatenatingAudioSource) {
+        await audioSource.insert(
+          safePosition,
+          AudioSource.uri(Uri.parse(song.uri)),
+        );
+      }
+    } catch (e, st) {
+      debugPrint('ADD TO QUEUE ERROR');
+      debugPrint(e.toString());
+      debugPrint(st.toString());
+    }
+  }
+
+  /// Removes a song (by id) that was previously added via [addToQueue].
+  /// Only affects songs still sitting in the manual "up next" queue — it
+  /// won't remove the currently playing song or already-played history.
+  Future<void> removeFromQueue(int songId) async {
+    final isManuallyQueued = manualQueue.value.any((s) => s.id == songId);
+
+    if (!isManuallyQueued) return;
+
+    final index = queue.value.indexWhere((s) => s.id == songId);
+
+    if (index == -1) return;
+
+    final updatedQueue = List<Song>.from(queue.value)..removeAt(index);
+    queue.value = updatedQueue;
+
+    manualQueue.value = List<Song>.from(manualQueue.value)
+      ..removeWhere((s) => s.id == songId);
+
+    try {
+      final audioSource = _player.audioSource;
+
+      if (audioSource is ConcatenatingAudioSource) {
+        await audioSource.removeAt(index);
+      }
+    } catch (e, st) {
+      debugPrint('REMOVE FROM QUEUE ERROR');
+      debugPrint(e.toString());
+      debugPrint(st.toString());
+    }
+  }
+
+  void clearManualQueue() {
+    manualQueue.value = [];
   }
 
   Future<void> toggle() async {
