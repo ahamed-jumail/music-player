@@ -1,6 +1,6 @@
 # ajs_music_player
 
-A new Flutter project.
+A personally customized music player with some features built with premium UI.
 
 ## Getting Started
 
