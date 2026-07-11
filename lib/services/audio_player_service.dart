@@ -1,4 +1,5 @@
 import 'package:ajs_music_player/services/ajs_audio_handler.dart';
+import 'package:ajs_music_player/services/online_payer_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:just_audio/just_audio.dart';
 
@@ -96,6 +97,9 @@ class AudioPlayerService {
   }
 
   Future<void> play(List<Song> songs, int index) async {
+    // Only one playback source is ever active at a time.
+    await OnlinePlayerService.instance.stop();
+
     queue.value = songs;
     manualQueue.value = [];
 
@@ -139,8 +143,7 @@ class AudioPlayerService {
       return;
     }
 
-    final insertPosition =
-        currentIndex.value + 1 + manualQueue.value.length;
+    final insertPosition = currentIndex.value + 1 + manualQueue.value.length;
 
     final updatedQueue = List<Song>.from(queue.value);
     final safePosition = insertPosition.clamp(0, updatedQueue.length);

@@ -32,6 +32,7 @@ class _ParentPageState extends State<ParentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       body: IndexedStack(index: _index, children: _pages),
       bottomNavigationBar: (_index == 0 || _index == 2)
           ? null

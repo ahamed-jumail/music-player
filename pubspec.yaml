@@ -43,6 +43,9 @@ dependencies:
   just_audio: ^0.9.40
   flutter_launcher_icons: ^0.14.3
   audio_service: ^0.18.17
+  http: ^1.2.2
+  youtube_player_iframe: ^6.0.2
+  webview_flutter_android: any
 
 
 dev_dependencies:
